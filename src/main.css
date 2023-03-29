@@ -1,0 +1,16 @@
+:root {
+  --tile-size: 80px;
+  --piece-size: 65%;
+  --board-border-radius: 10px;
+}
+
+body {
+  background-color: #ffedbf;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
