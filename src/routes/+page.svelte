@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import socket from '../socket';
+  import { initialFEN } from '../utility/fen';
 
   let clicked = false;
   let url = '';
@@ -12,24 +14,28 @@
   }
 
   async function handle() {
+    if (!browser) return;
     const response = await fetch(import.meta.env.VITE_API_URL);
     url = await response.text();
     clicked = true;
 
     socket.auth = {
       ...socket.auth,
-      gameUrl: url,
-      createGame: { side: 'white' }
+      gameUrl: url
     };
-    socket.connect();
+    const newGame = {gameFEN: initialFEN, side: 'white'};
+    if (!socket.connected) socket.connect();
+    
+    socket.emit('init game', newGame);
+    console.log(newGame)
 
     socket.on('connect_error', (err) => {
       console.log('connection error!');
       console.log(err);
     });
-    socket.once('player-connect', () => {
-      goto('url')
-    })
+    socket.once('player connect', () => {
+      goto('/' + url);
+    });
   }
 </script>
 

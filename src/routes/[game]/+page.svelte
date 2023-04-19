@@ -1,32 +1,67 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import socket from '../../socket';
+  import { blankFEN, readFEN, writeFEN } from '../../utility/fen';
 
   interface ITile {
     pos: number[];
     piece: { isBlack: boolean; isKing: boolean } | null;
   }
 
-  let tiles: ITile[][] = Array.from(Array(8), () => Array<ITile>(8));
-  let isWhitesTurn: boolean = true;
+  const gameUrl = $page.url.pathname.slice(1);
+
+  let tiles: ITile[][] = initTiles();
+  let isWhiteSide: boolean;
+  let isWhiteTurn: boolean;
   let selectedPiece: ITile | null = null;
   let highlightedList: number[][] = [];
   let attackingPieces: ITile[] = [];
   let playablePieces: ITile[] = [];
+  let turn: number = 1;
+  let isLoading: boolean = true;
 
-  $: isWhitesTurn, getPlayableTiles();
-  $: selectedPiece, highlightTiles();
+  $: if (!isLoading) {
+    if (isWhiteTurn === isWhiteSide) {
+      getPlayablePieces();
+    }
+  }
+  $: selectedPiece, highlightedList = highlightTiles();
   $: isHighlighted = (tile: ITile) => {
+    if (isWhiteTurn !== isWhiteSide) return false;
+
     return highlightedList
       .map((el) => el.toString())
       .includes(tile.pos.toString());
   };
 
+  $: board = () => {
+    if (isLoading || isWhiteSide) return tiles.flat();
+    return tiles
+      .map((row) => row.reverse())
+      .reverse()
+      .flat();
+  };
+
+  const promiseInit = new Promise<void>(async (resolve, reject) => {
+    try {
+      await connectSocket();
+      isLoading = false;
+      resolve();
+    } catch (er) {
+      reject();
+    }
+  });
+
   async function connectSocket() {
-    const gameUrl = $page.url.pathname.slice(1);
+    if (!browser) return;
+
     socket.auth = { ...socket.auth, gameUrl: gameUrl };
-    socket.connect();
+
+    socket.on('next move', (fen) => {
+      ({ tiles, isWhiteTurn, turn } = readFEN(fen));
+    });
 
     socket.on('connect_error', (err) => {
       if (err.message === 'auth not provided') {
@@ -38,6 +73,40 @@
         goto('/');
       }
     });
+
+    if (!socket.connected) socket.connect();
+
+    let data;
+    try {
+      data = await loadGame();
+    } catch (error) {
+      throw new Error('Could not load game');
+    }
+    isWhiteSide = data.playerSide === 'white';
+    ({ tiles, isWhiteTurn, turn } = readFEN(data.gameFEN));
+    console.log(readFEN(data.gameFEN));
+    console.log(isWhiteSide);
+  }
+
+  function loadGame(): Promise<{ gameFEN: string; playerSide: string }> {
+    return new Promise((resolve, reject) => {
+      socket.emit('request game', (response: any) => {
+        response ? resolve(response) : reject('Requested game was not found');
+      });
+      // socket.once('response game', (data) => {
+      //   console.log(data)
+      //   resolve(data);
+      // });
+    });
+  }
+
+  function sendFEN() {
+    const fen = writeFEN({ tiles, isWhiteTurn, turn });
+    socket.emit('next move', fen);
+  }
+
+  function initTiles() {
+    return readFEN(blankFEN).tiles;
   }
 
   function isGray(tile: ITile) {
@@ -45,25 +114,9 @@
     return (r + c) % 2 == 1;
   }
 
-  function initGame() {
-    for (let i = 0; i < 8; i++) {
-      for (let j = 0; j < 8; j++) {
-        const tile: ITile = {
-          pos: [i, j],
-          piece:
-            (i + j) % 2 === 1 && (i < 3 || i > 4)
-              ? { isBlack: i < 3, isKing: false }
-              : null
-        };
-        tiles[i][j] = tile;
-      }
-    }
-
-    getPlayableTiles();
-    highlightTiles();
-  }
-
   function handleClick(tile: ITile) {
+    if (isWhiteTurn !== isWhiteSide) return;
+
     if (!selectedPiece) {
       // on turn start primarily choose pieces that can attack
       if (attackingPieces.length > 0) {
@@ -78,21 +131,19 @@
     let end = tile;
 
     if (attackingPieces.length > 0) {
-      const captureMoves = getAllPossibleMoves(start, true);
+      const captureMoves = getAllPossibleCaptures(start);
       if (
         captureMoves.map((el) => el.toString()).includes(end.pos.toString())
       ) {
         const capturedTiles = getCapturedTiles(start, end);
         capturedTiles.find((el) => el.piece)!.piece = null;
         swap(start, end);
-        if (canCapture(end)) {
+        if (canPieceCapture(end)) {
           selectedPiece = end;
           attackingPieces = [end];
           return;
         }
-        selectedPiece = null;
-        isWhitesTurn = !isWhitesTurn;
-        return;
+        return endTurn();
       } else {
         if (listContains(attackingPieces, end)) {
           selectedPiece = end;
@@ -107,15 +158,13 @@
         const state = start.piece!.isKing;
         swap(start, end);
         if (state !== end.piece!.isKing) {
-          if (canCapture(end)) {
+          if (canPieceCapture(end)) {
             selectedPiece = end;
             attackingPieces = [end];
             return;
           }
         }
-        selectedPiece = null;
-        isWhitesTurn = !isWhitesTurn;
-        return;
+        return endTurn();
       } else {
         if (listContains(playablePieces, end)) {
           selectedPiece = end;
@@ -124,6 +173,13 @@
         selectedPiece = null;
       }
     }
+  }
+
+  function endTurn() {
+    selectedPiece = null;
+    isWhiteTurn = !isWhiteTurn;
+    turn++;
+    sendFEN();
   }
 
   function isValidMove(start: ITile, end: ITile): boolean {
@@ -183,7 +239,7 @@
     return true;
   }
 
-  function getAllPossibleMoves(piece: ITile, onlyCaptures = false): number[][] {
+  function getAllPossibleMoves(piece: ITile, onlyCaptures = false ): number[][] {
     const [row, col] = piece.pos;
     const moves = [] as number[][];
     const diagonals = [] as ITile[];
@@ -215,6 +271,10 @@
 
     return moves;
   }
+  
+  function getAllPossibleCaptures(piece: ITile): number[][] {
+    return getAllPossibleMoves(piece, true)
+  }
 
   function swap(start: ITile, end: ITile) {
     end.piece = start.piece;
@@ -243,50 +303,51 @@
     return capturedTiles;
   }
 
-  function getPlayableTiles() {
+  function getPlayablePieces() {
     attackingPieces = [];
     playablePieces = [];
-    for (const row of tiles) {
-      for (const el of row) {
-        if (el.piece && el.piece.isBlack === !isWhitesTurn && canCapture(el))
-          attackingPieces = [...attackingPieces, el];
-        else if (
-          el.piece &&
-          el.piece.isBlack === !isWhitesTurn &&
-          getAllPossibleMoves(el).length > 0
-        )
-          playablePieces = [...playablePieces, el];
+    const ownPieces = tiles
+      .flat()
+      .filter((tile) => tile.piece?.isBlack !== isWhiteSide);
+    for (const piece of ownPieces) {
+      if (canPieceCapture(piece)) {
+        attackingPieces = [...attackingPieces, piece];
+      } else if (getAllPossibleMoves(piece).length > 0) {
+        playablePieces = [...playablePieces, piece];
       }
     }
+    highlightedList = highlightTiles();
+
     if (playablePieces.length === 0) {
       getWinner();
     }
   }
 
   function highlightTiles() {
+    let list = [];
     if (!selectedPiece) {
-      highlightedList = [];
       if (attackingPieces.length > 0) {
-        highlightedList = [...attackingPieces.map((el) => el.pos)];
+        list = [...attackingPieces.map((el) => el.pos)];
       } else {
-        highlightedList = [...playablePieces.map((el) => el.pos)];
+        list = [...playablePieces.map((el) => el.pos)];
       }
     } else {
-      if (canCapture(selectedPiece))
-        highlightedList = [
+      if (canPieceCapture(selectedPiece))
+        list = [
           selectedPiece.pos,
-          ...getAllPossibleMoves(selectedPiece, true)
+          ...getAllPossibleCaptures(selectedPiece)
         ];
       else
-        highlightedList = [
+        list = [
           selectedPiece.pos,
           ...getAllPossibleMoves(selectedPiece)
         ];
     }
+    return list
   }
 
-  function canCapture(piece: ITile): boolean {
-    return getAllPossibleMoves(piece, true).length > 0;
+  function canPieceCapture(piece: ITile): boolean {
+    return getAllPossibleCaptures(piece).length > 0;
   }
 
   function listContains(list: ITile[], tile: ITile): boolean {
@@ -294,33 +355,47 @@
   }
 
   function getWinner() {
-    const winner = isWhitesTurn ? 'Second Player' : 'First Player';
+    const winner = 'aboba';
     // to be continued
   }
-
-  initGame();
-  connectSocket();
 </script>
 
 <div class="tiles">
-  {#each tiles.flat() as tile (tile.pos.toString())}
-    <button
-      class="tile"
-      class:gray={isGray(tile)}
-      class:highlight={isHighlighted(tile)}
-      on:click={() => handleClick(tile)}
-    >
-      {#if tile.piece}
-        <div class="piece" class:black={tile.piece.isBlack}>
-          <span class:hidden={!tile.piece.isKing}>&#128081;</span>
-        </div>
-      {/if}
-    </button>
-  {/each}
+  {#await promiseInit}
+    <div class="blur">
+      <span class="loader" />
+    </div>
+    {#each board() as tile (tile)}
+      <button class="tile" class:gray={isGray(tile)} />
+    {/each}
+  {:then _}
+    <!-- FIX KEYS AND STRANGE BEHAVIOUR ON BLACKS -->
+    {#each board() as tile (tile)}
+      <button
+        class="tile"
+        class:gray={isGray(tile)}
+        class:highlight={isHighlighted(tile)}
+        on:click={() => {
+          handleClick(tile);
+        }}
+      >
+        <span style="color: brown;">{tile.pos.toString()}</span>
+        {#if tile.piece}
+          <div class="piece" class:black={tile.piece.isBlack}>
+            <span class:hidden={!tile.piece.isKing}>&#128081;</span>
+          </div>
+        {/if}
+      </button>
+    {/each}
+  {:catch}
+    <h1 style="color: red; position: absolute;">ПРОИЗОШЕЛ ЕРРОР</h1>
+  {/await}
 </div>
 
 <style>
   .tiles {
+    height: calc(var(--tile-size) * 8);
+    width: calc(var(--tile-size) * 8);
     display: grid;
     grid-template-columns: repeat(8, 1fr);
     border-radius: var(--board-border-radius);
@@ -381,5 +456,39 @@
   }
   .hidden {
     visibility: hidden;
+  }
+
+  .blur {
+    backdrop-filter: blur(3px);
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100vw;
+    height: 100vh;
+  }
+  .loader {
+    z-index: 10;
+    top: 0;
+    left: 0;
+    width: 48px;
+    height: 48px;
+    border: 5px solid #212121;
+    border-bottom-color: transparent;
+    border-radius: 50%;
+    display: inline-block;
+    box-sizing: border-box;
+    animation: rotation 1s linear infinite;
+  }
+
+  @keyframes rotation {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
   }
 </style>
