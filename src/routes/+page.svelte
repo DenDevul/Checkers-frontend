@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import socket from '../socket';
-  import { initialFEN } from '../utility/fen';
+  import { initialFen } from '../utility/fen';
 
   let clicked = false;
   let url = '';
@@ -23,7 +23,7 @@
       ...socket.auth,
       gameUrl: url
     };
-    const newGame = {gameFEN: initialFEN, side: 'white'};
+    const newGame = {fen: initialFen, side: 'white'};
     if (!socket.connected) socket.connect();
     
     socket.emit('init game', newGame);

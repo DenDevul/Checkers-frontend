@@ -1,20 +1,24 @@
-interface ITile {
+/*
+  FEN - notation for describing board position of a game:
+    https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation
+*/
+
+interface Tile {
   pos: number[];
   piece: { isBlack: boolean; isKing: boolean } | null;
 }
 
-const initialFEN =
+const initialFen =
   '1b1b1b1b/b1b1b1b1/1b1b1b1b/8/8/w1w1w1w1/1w1w1w1w/w1w1w1w1 w 1';
-const blankFEN = '8/8/8/8/8/8/8/8 w 1';
 
-function readFEN(notation: string) {
-  let tiles: ITile[][] = Array.from(Array(8), () => Array<ITile>(8));
+function readFen(notation: string) {
+  let tiles: Tile[][] = Array.from(Array(8), () => Array<Tile>(8));
   let i = 0,
     j = 0;
   const [board, side, turnStr]: string[] = notation.split(' ');
   for (const char of board) {
     if (char.match(/[bw]/i)) {
-      const piece: ITile = {
+      const piece: Tile = {
         pos: [i, j],
         piece: {
           isBlack: char.toLowerCase() === 'b',
@@ -25,7 +29,7 @@ function readFEN(notation: string) {
       j++;
     } else if (char.match(/[1-8]/)) {
       for (let k = 0; k < parseInt(char, 10); k++) {
-        const tile: ITile = {
+        const tile: Tile = {
           pos: [i, j],
           piece: null
         };
@@ -42,8 +46,8 @@ function readFEN(notation: string) {
   return { tiles, isWhiteTurn, turn };
 }
 
-function writeFEN(obj: {
-  tiles: ITile[][];
+function writeFen(obj: {
+  tiles: Tile[][];
   isWhiteTurn: boolean;
   turn: number;
 }): string {
@@ -76,4 +80,4 @@ function writeFEN(obj: {
   return notation;
 }
 
-export { readFEN, writeFEN, initialFEN, blankFEN};
+export { readFen, writeFen, initialFen };

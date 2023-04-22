@@ -3,45 +3,50 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import socket from '../../socket';
-  import { blankFEN, readFEN, writeFEN } from '../../utility/fen';
+  import { initialFen, readFen, writeFen } from '../../utility/fen';
 
-  interface ITile {
+  interface Tile {
     pos: number[];
     piece: { isBlack: boolean; isKing: boolean } | null;
   }
 
   const gameUrl = $page.url.pathname.slice(1);
 
-  let tiles: ITile[][] = initTiles();
+  let tiles: Tile[][] = readFen(initialFen).tiles;
+  let selectedPiece: Tile | null = null;
+  let possibleMoves: Tile[] = [];
+  let playablePieces: Tile[] = [];
   let isWhiteSide: boolean;
   let isWhiteTurn: boolean;
-  let selectedPiece: ITile | null = null;
-  let highlightedList: number[][] = [];
-  let attackingPieces: ITile[] = [];
-  let playablePieces: ITile[] = [];
-  let turn: number = 1;
+  let turn: number;
   let isLoading: boolean = true;
 
   $: if (!isLoading) {
     if (isWhiteTurn === isWhiteSide) {
-      getPlayablePieces();
+      playablePieces = getPlayablePieces();
+
+      if (playablePieces.length == 0) endGame();
     }
   }
-  $: selectedPiece, highlightedList = highlightTiles();
-  $: isHighlighted = (tile: ITile) => {
-    if (isWhiteTurn !== isWhiteSide) return false;
+  $: if (selectedPiece) {
+    const captures = getAllPossibleCaptures(selectedPiece);
+    const moves = getAllPossibleMoves(selectedPiece);
+    possibleMoves = captures.length > 0 ? captures : moves;
+  }
+  $: isHighlighted = (tile: Tile): boolean => {
+    if (isLoading || isWhiteTurn !== isWhiteSide) return false;
 
-    return highlightedList
-      .map((el) => el.toString())
-      .includes(tile.pos.toString());
+    if (!selectedPiece) return listIncludes(playablePieces, tile);
+
+    return listIncludes([...possibleMoves, selectedPiece], tile);
   };
 
   $: board = () => {
     if (isLoading || isWhiteSide) return tiles.flat();
-    return tiles
-      .map((row) => row.reverse())
-      .reverse()
-      .flat();
+    else {
+      let board = [...tiles].reverse();
+      return board.map((row) => [...row].reverse()).flat();
+    }
   };
 
   const promiseInit = new Promise<void>(async (resolve, reject) => {
@@ -54,13 +59,22 @@
     }
   });
 
-  async function connectSocket() {
+  async function connectSocket(): Promise<void> {
     if (!browser) return;
 
     socket.auth = { ...socket.auth, gameUrl: gameUrl };
 
-    socket.on('next move', (fen) => {
-      ({ tiles, isWhiteTurn, turn } = readFEN(fen));
+    socket.on('next move', (fen: string) => {
+      ({ tiles, isWhiteTurn, turn } = readFen(fen));
+    });
+    
+    socket.on('end game', (result: string) => {
+      const isWhiteWon = result == '1-0'
+      if (isWhiteSide === isWhiteWon) {
+        // show 'you won' screen
+      } else {
+        // show 'better luck next time' screen
+      }
     });
 
     socket.on('connect_error', (err) => {
@@ -83,106 +97,75 @@
       throw new Error('Could not load game');
     }
     isWhiteSide = data.playerSide === 'white';
-    ({ tiles, isWhiteTurn, turn } = readFEN(data.gameFEN));
-    console.log(readFEN(data.gameFEN));
-    console.log(isWhiteSide);
+    ({ tiles, isWhiteTurn, turn } = readFen(data.fen));
   }
 
-  function loadGame(): Promise<{ gameFEN: string; playerSide: string }> {
+  function loadGame(): Promise<{ fen: string; playerSide: string }> {
     return new Promise((resolve, reject) => {
       socket.emit('request game', (response: any) => {
         response ? resolve(response) : reject('Requested game was not found');
       });
-      // socket.once('response game', (data) => {
-      //   console.log(data)
-      //   resolve(data);
-      // });
     });
   }
 
-  function sendFEN() {
-    const fen = writeFEN({ tiles, isWhiteTurn, turn });
+  function sendFen(): void {
+    const fen = writeFen({ tiles, isWhiteTurn, turn });
     socket.emit('next move', fen);
   }
 
-  function initTiles() {
-    return readFEN(blankFEN).tiles;
-  }
-
-  function isGray(tile: ITile) {
-    const [r, c] = tile.pos;
-    return (r + c) % 2 == 1;
-  }
-
-  function handleClick(tile: ITile) {
+  function handleClick(tile: Tile) {
     if (isWhiteTurn !== isWhiteSide) return;
 
     if (!selectedPiece) {
-      // on turn start primarily choose pieces that can attack
-      if (attackingPieces.length > 0) {
-        if (listContains(attackingPieces, tile)) selectedPiece = tile;
-        return;
-      }
-      if (listContains(playablePieces, tile)) selectedPiece = tile;
+      if (listIncludes(playablePieces, tile)) selectedPiece = tile;
       return;
     }
 
     let start = selectedPiece;
     let end = tile;
 
-    if (attackingPieces.length > 0) {
-      const captureMoves = getAllPossibleCaptures(start);
-      if (
-        captureMoves.map((el) => el.toString()).includes(end.pos.toString())
-      ) {
+    if (canPieceCapture(start)) {
+      if (listIncludes(possibleMoves, end)) {
         const capturedTiles = getCapturedTiles(start, end);
         capturedTiles.find((el) => el.piece)!.piece = null;
         swap(start, end);
         if (canPieceCapture(end)) {
           selectedPiece = end;
-          attackingPieces = [end];
+          playablePieces = [end];
+          sendFen();
           return;
         }
         return endTurn();
       } else {
-        if (listContains(attackingPieces, end)) {
+        return selectOther(end);
+      }
+    }
+
+    if (listIncludes(possibleMoves, end)) {
+      const state = start.piece!.isKing;
+      swap(start, end);
+      if (state !== end.piece!.isKing) {
+        if (canPieceCapture(end)) {
           selectedPiece = end;
+          playablePieces = [end];
+          sendFen();
           return;
         }
-        selectedPiece = null;
-        return;
       }
+      return endTurn();
     } else {
-      const moves = getAllPossibleMoves(start);
-      if (moves.map((el) => el.toString()).includes(end.pos.toString())) {
-        const state = start.piece!.isKing;
-        swap(start, end);
-        if (state !== end.piece!.isKing) {
-          if (canPieceCapture(end)) {
-            selectedPiece = end;
-            attackingPieces = [end];
-            return;
-          }
-        }
-        return endTurn();
-      } else {
-        if (listContains(playablePieces, end)) {
-          selectedPiece = end;
-          return;
-        }
-        selectedPiece = null;
-      }
+      return selectOther(end);
     }
   }
 
-  function endTurn() {
+  function endTurn(): void {
     selectedPiece = null;
     isWhiteTurn = !isWhiteTurn;
     turn++;
-    sendFEN();
+    sendFen();
   }
 
-  function isValidMove(start: ITile, end: ITile): boolean {
+  function isValidMove(start: Tile, end: Tile): boolean {
     if (!start.piece || end.piece) return false;
 
     const [rowStart, colStart] = start.pos;
@@ -213,7 +196,7 @@
     return true;
   }
 
-  function isValidCapture(start: ITile, end: ITile): boolean {
+  function isValidCapture(start: Tile, end: Tile): boolean {
     if (!start.piece || end.piece) return false;
 
     const [rowStart, colStart] = start.pos;
@@ -239,10 +222,10 @@
     return true;
   }
 
-  function getAllPossibleMoves(piece: ITile, onlyCaptures = false ): number[][] {
+  function getAllPossibleMoves(piece: Tile, onlyCaptures = false): Tile[] {
     const [row, col] = piece.pos;
-    const moves = [] as number[][];
-    const diagonals = [] as ITile[];
+    const moves: Tile[] = [];
+    const diagonals: Tile[] = [];
 
     // Check up-left direction
     for (let r = row - 1, c = col - 1; r >= 0 && c >= 0; r--, c--) {
@@ -266,17 +249,17 @@
         (isValidMove(piece, move) && !onlyCaptures) ||
         isValidCapture(piece, move)
       )
-        moves.push(move.pos);
+        moves.push(move);
     }
 
     return moves;
   }
-  
-  function getAllPossibleCaptures(piece: ITile): number[][] {
-    return getAllPossibleMoves(piece, true)
+
+  function getAllPossibleCaptures(piece: Tile): Tile[] {
+    return getAllPossibleMoves(piece, true);
   }
 
-  function swap(start: ITile, end: ITile) {
+  function swap(start: Tile, end: Tile): void {
     end.piece = start.piece;
     start.piece = null;
     const row = end.pos[0];
@@ -285,7 +268,7 @@
     tiles = tiles;
   }
 
-  function getCapturedTiles(start: ITile, end: ITile): ITile[] {
+  function getCapturedTiles(start: Tile, end: Tile): Tile[] {
     const [rowStart, colStart] = start.pos;
     const [rowEnd, colEnd] = end.pos;
     let steps = 2;
@@ -299,64 +282,48 @@
       ];
       capturedTiles.push(tiles[row][col]);
     }
-
     return capturedTiles;
   }
 
-  function getPlayablePieces() {
-    attackingPieces = [];
-    playablePieces = [];
+  function getPlayablePieces(): Tile[] {
+    let pieces = [];
+    const attack: Tile[] = [];
+    const move: Tile[] = [];
     const ownPieces = tiles
       .flat()
       .filter((tile) => tile.piece?.isBlack !== isWhiteSide);
     for (const piece of ownPieces) {
-      if (canPieceCapture(piece)) {
-        attackingPieces = [...attackingPieces, piece];
-      } else if (getAllPossibleMoves(piece).length > 0) {
-        playablePieces = [...playablePieces, piece];
-      }
+      if (canPieceCapture(piece)) attack.push(piece);
+      else if (getAllPossibleMoves(piece).length > 0) move.push(piece);
     }
-    highlightedList = highlightTiles();
-
-    if (playablePieces.length === 0) {
-      getWinner();
-    }
+    pieces = attack.length > 0 ? attack : move;
+    return pieces;
   }
 
-  function highlightTiles() {
-    let list = [];
-    if (!selectedPiece) {
-      if (attackingPieces.length > 0) {
-        list = [...attackingPieces.map((el) => el.pos)];
-      } else {
-        list = [...playablePieces.map((el) => el.pos)];
-      }
-    } else {
-      if (canPieceCapture(selectedPiece))
-        list = [
-          selectedPiece.pos,
-          ...getAllPossibleCaptures(selectedPiece)
-        ];
-      else
-        list = [
-          selectedPiece.pos,
-          ...getAllPossibleMoves(selectedPiece)
-        ];
-    }
-    return list
-  }
-
-  function canPieceCapture(piece: ITile): boolean {
+  function canPieceCapture(piece: Tile): boolean {
     return getAllPossibleCaptures(piece).length > 0;
   }
 
-  function listContains(list: ITile[], tile: ITile): boolean {
-    return list.some((el) => el.pos.toString() == tile.pos.toString());
+  function selectOther(tile: Tile): void {
+    if (listIncludes(playablePieces, tile)) {
+      selectedPiece = tile;
+    } else {
+      selectedPiece = null;
+    }
   }
 
-  function getWinner() {
-    const winner = 'aboba';
-    // to be continued
+  function listIncludes(list: Tile[], tile: Tile): boolean {
+    return list.map((el) => el.pos.toString()).includes(tile.pos.toString());
+  }
+
+  function isGray(tile: Tile): boolean {
+    const [r, c] = tile.pos;
+    return (r + c) % 2 == 1;
+  }
+
+  function endGame() {
+    const result = isWhiteSide ? '0-1' : '1-0';
+    socket.emit('end game', result);
   }
 </script>
 
@@ -369,7 +336,6 @@
       <button class="tile" class:gray={isGray(tile)} />
     {/each}
   {:then _}
-    <!-- FIX KEYS AND STRANGE BEHAVIOUR ON BLACKS -->
     {#each board() as tile (tile)}
       <button
         class="tile"
@@ -379,7 +345,6 @@
           handleClick(tile);
         }}
       >
-        <span style="color: brown;">{tile.pos.toString()}</span>
         {#if tile.piece}
           <div class="piece" class:black={tile.piece.isBlack}>
             <span class:hidden={!tile.piece.isKing}>&#128081;</span>
