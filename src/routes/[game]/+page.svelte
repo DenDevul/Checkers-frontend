@@ -7,10 +7,8 @@
 
   interface Tile {
     pos: number[];
-    piece: { isBlack: boolean; isKing: boolean } | null;
+    piece: { isWhite: boolean; isKing: boolean } | null;
   }
-
-  const gameUrl = $page.url.pathname.slice(1);
 
   let tiles: Tile[][] = readFen(initialFen).tiles;
   let selectedPiece: Tile | null = null;
@@ -20,13 +18,16 @@
   let isWhiteTurn: boolean;
   let turn: number;
   let isLoading: boolean = true;
+  let canPlay: boolean = false;
+  let gameResult: string = '*';
 
   $: if (!isLoading) {
-    if (isWhiteTurn === isWhiteSide) {
-      playablePieces = getPlayablePieces();
+    if (gameResult !== '*') canPlay = false;
+    else if (isWhiteSide === isWhiteTurn) canPlay = true;
+  }
 
-      if (playablePieces.length == 0) endGame();
-    }
+  $: if (canPlay) {
+    playablePieces = getPlayablePieces();
   }
   $: if (selectedPiece) {
     const captures = getAllPossibleCaptures(selectedPiece);
@@ -34,7 +35,7 @@
     possibleMoves = captures.length > 0 ? captures : moves;
   }
   $: isHighlighted = (tile: Tile): boolean => {
-    if (isLoading || isWhiteTurn !== isWhiteSide) return false;
+    if (!canPlay) return false;
 
     if (!selectedPiece) return listIncludes(playablePieces, tile);
 
@@ -51,30 +52,28 @@
 
   const promiseInit = new Promise<void>(async (resolve, reject) => {
     try {
-      await connectSocket();
+      connectSocket();
+      await loadGame();
       isLoading = false;
       resolve();
     } catch (er) {
-      reject();
+      reject(er);
     }
   });
 
-  async function connectSocket(): Promise<void> {
+  function connectSocket(): void {
     if (!browser) return;
 
+    const gameUrl = $page.url.pathname.slice(1);
     socket.auth = { ...socket.auth, gameUrl: gameUrl };
 
     socket.on('next move', (fen: string) => {
       ({ tiles, isWhiteTurn, turn } = readFen(fen));
     });
-    
+
     socket.on('end game', (result: string) => {
-      const isWhiteWon = result == '1-0'
-      if (isWhiteSide === isWhiteWon) {
-        // show 'you won' screen
-      } else {
-        // show 'better luck next time' screen
-      }
+      console.log(result);
+      gameResult = calcGameResult(result);
     });
 
     socket.on('connect_error', (err) => {
@@ -82,6 +81,7 @@
         goto('/');
       }
     });
+
     socket.on('disconnect', (reason) => {
       if (reason === 'io server disconnect') {
         goto('/');
@@ -89,23 +89,28 @@
     });
 
     if (!socket.connected) socket.connect();
+  }
 
-    let data;
+  async function loadGame(): Promise<void> {
+    const promise = new Promise<{
+      fen: string;
+      playerSide: string;
+      result: string;
+    }>((resolve, reject) => {
+      socket.emit('request game', (response: any) => {
+        response
+          ? resolve(response)
+          : reject(new Error('Requested game was not found'));
+      });
+    });
     try {
-      data = await loadGame();
+      const data = await promise;
+      isWhiteSide = data.playerSide === 'white';
+      ({ tiles, isWhiteTurn, turn } = readFen(data.fen));
+      gameResult = calcGameResult(data.result);
     } catch (error) {
       throw new Error('Could not load game');
     }
-    isWhiteSide = data.playerSide === 'white';
-    ({ tiles, isWhiteTurn, turn } = readFen(data.fen));
-  }
-
-  function loadGame(): Promise<{ fen: string; playerSide: string }> {
-    return new Promise((resolve, reject) => {
-      socket.emit('request game', (response: any) => {
-        response ? resolve(response) : reject('Requested game was not found');
-      });
-    });
   }
 
   function sendFen(): void {
@@ -114,7 +119,7 @@
   }
 
   function handleClick(tile: Tile) {
-    if (isWhiteTurn !== isWhiteSide) return;
+    if (!canPlay) return;
 
     if (!selectedPiece) {
       if (listIncludes(playablePieces, tile)) selectedPiece = tile;
@@ -158,13 +163,6 @@
     }
   }
 
-  function endTurn(): void {
-    selectedPiece = null;
-    isWhiteTurn = !isWhiteTurn;
-    turn++;
-    sendFen();
-  }
-
   function isValidMove(start: Tile, end: Tile): boolean {
     if (!start.piece || end.piece) return false;
 
@@ -180,8 +178,8 @@
         return false;
       // not move forward
       if (
-        (!start.piece.isBlack && rowStart < rowEnd) ||
-        (start.piece.isBlack && rowStart > rowEnd)
+        (start.piece.isWhite && rowStart < rowEnd) ||
+        (!start.piece.isWhite && rowStart > rowEnd)
       )
         return false;
     } else {
@@ -215,7 +213,7 @@
 
     if (
       capturedPieces.length !== 1 ||
-      capturedPieces[0].piece!.isBlack === start.piece.isBlack
+      capturedPieces[0].piece!.isWhite === start.piece.isWhite
     )
       return false;
 
@@ -263,7 +261,7 @@
     end.piece = start.piece;
     start.piece = null;
     const row = end.pos[0];
-    if ((row === 0 && !end.piece!.isBlack) || (row === 7 && end.piece!.isBlack))
+    if ((row === 0 && end.piece!.isWhite) || (row === 7 && !end.piece!.isWhite))
       end.piece!.isKing = true;
     tiles = tiles;
   }
@@ -291,7 +289,7 @@
     const move: Tile[] = [];
     const ownPieces = tiles
       .flat()
-      .filter((tile) => tile.piece?.isBlack !== isWhiteSide);
+      .filter((tile) => tile.piece?.isWhite === isWhiteSide);
     for (const piece of ownPieces) {
       if (canPieceCapture(piece)) attack.push(piece);
       else if (getAllPossibleMoves(piece).length > 0) move.push(piece);
@@ -321,9 +319,66 @@
     return (r + c) % 2 == 1;
   }
 
-  function endGame() {
-    const result = isWhiteSide ? '0-1' : '1-0';
+  function endTurn(): void {
+    const result = checkGameOver();
+    selectedPiece = null;
+    isWhiteTurn = !isWhiteTurn;
+    turn++;
+    sendFen();
+    if (result !== '*') endGame(result);
+  }
+
+  function checkGameOver(): string {
+    let res = '*';
+    const ownPlayPieces: Tile[] = [];
+    const enemyPlayPieces: Tile[] = [];
+    for (const tile of tiles.flat()) {
+      if (
+        tile.piece?.isWhite !== isWhiteSide &&
+        getAllPossibleMoves(tile).length > 0
+      )
+        enemyPlayPieces.push(tile);
+      if (
+        tile.piece?.isWhite === isWhiteSide &&
+        getAllPossibleMoves(tile).length > 0
+      )
+        ownPlayPieces.push(tile);
+    }
+    if (enemyPlayPieces.length === 0) {
+      if (ownPlayPieces.length === 0) res = '1/2-1/2';
+      else res = isWhiteSide ? '1-0' : '0-1';
+    }
+
+    return res;
+  }
+
+  function endGame(result: string) {
     socket.emit('end game', result);
+    gameResult = calcGameResult(result);
+  }
+
+  function calcGameResult(result: string): string {
+    let res = '';
+    switch (result) {
+      case '*':
+        res = '*';
+        break;
+      case '1-0':
+        res = isWhiteSide ? 'winner' : 'loser';
+        break;
+      case '0-1':
+        res = isWhiteSide ? 'loser' : 'winner';
+        break;
+      case '1/2-1/2':
+        res = 'draw';
+        break;
+    }
+    return res;
+  }
+
+  function redirectToHome() {
+    socket.auth = { ...socket.auth, gameUrl: null };
+    goto('/');
   }
 </script>
 
@@ -346,7 +401,7 @@
         }}
       >
         {#if tile.piece}
-          <div class="piece" class:black={tile.piece.isBlack}>
+          <div class="piece" class:black={tile.piece.isWhite}>
             <span class:hidden={!tile.piece.isKing}>&#128081;</span>
           </div>
         {/if}
@@ -356,6 +411,18 @@
     <h1 style="color: red; position: absolute;">ПРОИЗОШЕЛ ЕРРОР</h1>
   {/await}
 </div>
+{#if gameResult !== '*'}
+  <div class="game-over">
+    {#if gameResult === 'winner'}
+      <h1>Вы победили!</h1>
+    {:else if gameResult === 'loser'}
+      <h1>Увы, вы проиграли!</h1>
+    {:else if gameResult === 'draw'}
+      <h1>Ничья!</h1>
+    {/if}
+    <button on:click={redirectToHome}>сыграть новую игру</button>
+  </div>
+{/if}
 
 <style>
   .tiles {
@@ -455,5 +522,32 @@
     100% {
       transform: rotate(360deg);
     }
+  }
+
+  .game-over {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    border-radius: 1rem;
+    border: black 2px solid;
+    padding: 1rem;
+    gap: 1rem;
+    background: white;
+    box-shadow: rgba(100, 100, 111, 0.2) 0px 5px 29px 0px;
+  }
+  .game-over button {
+    padding: 8px;
+    text-transform: uppercase;
+    border-radius: 4px;
+    border: black 1px solid;
+    background-color: black;
+    color: white;
+    font-weight: bold;
+  }
+  .game-over button:active {
+    background-color: white;
+    color: black;
   }
 </style>

@@ -5,7 +5,7 @@
 
 interface Tile {
   pos: number[];
-  piece: { isBlack: boolean; isKing: boolean } | null;
+  piece: { isWhite: boolean; isKing: boolean } | null;
 }
 
 const initialFen =
@@ -21,7 +21,7 @@ function readFen(notation: string) {
       const piece: Tile = {
         pos: [i, j],
         piece: {
-          isBlack: char.toLowerCase() === 'b',
+          isWhite: char.toLowerCase() === 'w',
           isKing: char === char.toUpperCase()
         }
       };
@@ -62,7 +62,7 @@ function writeFen(obj: {
           notation += skip.toString();
           skip = 0;
         }
-        let letter = piece.isBlack ? 'b' : 'w';
+        let letter = piece.isWhite ? 'w' : 'b';
         letter = piece.isKing ? letter.toUpperCase() : letter;
         notation += letter;
       } else {
