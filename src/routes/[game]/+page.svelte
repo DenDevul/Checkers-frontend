@@ -23,7 +23,7 @@
 
   $: if (!isLoading) {
     if (gameResult !== '*') canPlay = false;
-    else if (isWhiteSide === isWhiteTurn) canPlay = true;
+    else canPlay = isWhiteSide === isWhiteTurn
   }
 
   $: if (canPlay) {
@@ -401,7 +401,7 @@
         }}
       >
         {#if tile.piece}
-          <div class="piece" class:black={tile.piece.isWhite}>
+          <div class="piece" class:black={!tile.piece.isWhite}>
             <span class:hidden={!tile.piece.isKing}>&#128081;</span>
           </div>
         {/if}
