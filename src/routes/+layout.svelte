@@ -5,17 +5,28 @@
   <title>Checkers</title>
 </svelte:head>
 
-<div class="wrapper-main">
+<header>
+  <h1>CHECKERS</h1>
+</header>
+<div class="wrapper">
   <slot />
 </div>
 
 <style>
   @import '../main.css';
-  .wrapper-main {
+  header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
     display: flex;
-    flex-direction: column;
-    align-items: center;
     justify-content: center;
+  }
+  .wrapper {
+    width: 100vw;
     height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
   }
 </style>

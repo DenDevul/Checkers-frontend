@@ -382,34 +382,56 @@
   }
 </script>
 
-<div class="tiles">
-  {#await promiseInit}
-    <div class="blur">
-      <span class="loader" />
+<div class="grid">
+  <div class="tiles">
+    {#await promiseInit}
+      <div class="blur">
+        <span class="loader" />
+      </div>
+      {#each board() as tile (tile)}
+        <button class="tile" class:gray={isGray(tile)} />
+      {/each}
+    {:then _}
+      {#each board() as tile (tile)}
+        <button
+          class="tile"
+          class:gray={isGray(tile)}
+          class:highlight={isHighlighted(tile)}
+          on:click={() => {
+            handleClick(tile);
+          }}
+        >
+          {#if tile.piece}
+            <div class="piece" class:black={tile.piece.isWhite}>
+              <span class:hidden={!tile.piece.isKing}>&#128081;</span>
+            </div>
+          {/if}
+        </button>
+      {/each}
+    {:catch}
+      <h1 style="color: red; position: absolute;">ПРОИЗОШЕЛ ЕРРОР</h1>
+    {/await}
+  </div>
+  <div class="controls">
+    <div class="turn b">
+      <h2>Ход белых</h2>
     </div>
-    {#each board() as tile (tile)}
-      <button class="tile" class:gray={isGray(tile)} />
-    {/each}
-  {:then _}
-    {#each board() as tile (tile)}
-      <button
-        class="tile"
-        class:gray={isGray(tile)}
-        class:highlight={isHighlighted(tile)}
-        on:click={() => {
-          handleClick(tile);
-        }}
+    <div class="flex-col">
+      <button class="btn giveup"
+        >Cдаться <img src="svg/flag.svg" alt="" /></button
       >
-        {#if tile.piece}
-          <div class="piece" class:black={tile.piece.isWhite}>
-            <span class:hidden={!tile.piece.isKing}>&#128081;</span>
-          </div>
-        {/if}
-      </button>
-    {/each}
-  {:catch}
-    <h1 style="color: red; position: absolute;">ПРОИЗОШЕЛ ЕРРОР</h1>
-  {/await}
+      <button class="btn btn-draw"
+        >Предложить ничью <img src="svg/handshake.svg" alt="" /></button
+      >
+    </div>
+    <div class="draw">
+      <p>Соперник предлагает ничью</p>
+      <div class="draw-buttons">
+        <button class="btn"><img src="svg/check.svg" alt="" /></button>
+        <button class="btn no"><img src="svg/close.svg" alt="" /></button>
+      </div>
+    </div>
+  </div>
 </div>
 {#if gameResult !== '*'}
   <div class="game-over">
@@ -425,13 +447,21 @@
 {/if}
 
 <style>
+  .grid {
+    display: grid;
+    grid-template:
+      '. board controls' auto
+      / 1fr auto 1fr;
+  }
+
   .tiles {
     height: calc(var(--tile-size) * 8);
     width: calc(var(--tile-size) * 8);
     display: grid;
     grid-template-columns: repeat(8, 1fr);
     border-radius: var(--board-border-radius);
-    box-shadow: rgba(100, 100, 111, 0.2) 0px 7px 29px 0px;
+    box-shadow: 0px 0px 20px 4px rgba(0, 0, 0, 0.08);
+    grid-area: board;
   }
 
   .tile {
@@ -535,7 +565,7 @@
     padding: 1rem;
     gap: 1rem;
     background: white;
-    box-shadow: rgba(100, 100, 111, 0.2) 0px 5px 29px 0px;
+    box-shadow: 0px 0px 12px 2px rgba(0, 0, 0, 0.08);
   }
   .game-over button {
     padding: 8px;
@@ -549,5 +579,88 @@
   .game-over button:active {
     background-color: white;
     color: black;
+  }
+
+  .controls {
+    grid-area: controls;
+    padding-left: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+  .controls img {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+
+  .turn {
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 2px;
+    text-align: center;
+  }
+  .turn.b {
+    background-color: black;
+    color: #fff;
+  }
+
+  .flex-col {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .btn {
+    border: none;
+    background-color: hsl(69, 69%, 55%);
+    border-radius: 8px;
+    padding: 8px;
+    font-size: 1.2rem;
+    box-shadow: 0px 0px 8px 1px rgb(0 0 0 / 0.1);
+  }
+  .btn:hover {
+    background-color: hsl(69, 69%, 48%);
+  }
+  .btn:active {
+    background-color: hsl(69, 69%, 41%);
+  }
+  .btn.giveup {
+    background-color: hsl(0, 0%, 100%);
+  }
+  .btn.giveup:hover {
+    background-color: hsl(0, 0%, 96%);
+  }
+  .btn.giveup:active {
+    background-color: hsl(0, 0%, 92%);
+  }
+  .btn.no {
+    background-color: hsl(9, 69%, 55%);
+  }
+  .btn.no:hover {
+    background-color: hsl(9, 69%, 48%);
+  }
+  .btn.no:active {
+    background-color: hsl(9, 69%, 41%);
+  }
+  .btn.btn-draw:active {
+    box-shadow: inset 0 0 10px 2px rgba(0, 0, 0, 0.2);
+  }
+
+  .draw {
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 8px;
+    font-weight: bold;
+    font-size: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .draw-buttons {
+    display: flex;
+    justify-content: space-evenly;
+  }
+  .draw-buttons button {
+    width: 5rem;
   }
 </style>
