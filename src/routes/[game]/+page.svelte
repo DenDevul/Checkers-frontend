@@ -10,6 +10,8 @@
     piece: { isWhite: boolean; isKing: boolean } | null;
   }
 
+  const gameUrl = $page.url.pathname.slice(1);
+
   let tiles: Tile[][] = readFen(initialFen).tiles;
   let selectedPiece: Tile | null = null;
   let possibleMoves: Tile[] = [];
@@ -23,7 +25,7 @@
 
   $: if (!isLoading) {
     if (gameResult !== '*') canPlay = false;
-    else canPlay = isWhiteSide === isWhiteTurn
+    else canPlay = isWhiteSide === isWhiteTurn;
   }
 
   $: if (canPlay) {
@@ -64,9 +66,6 @@
   function connectSocket(): void {
     if (!browser) return;
 
-    const gameUrl = $page.url.pathname.slice(1);
-    socket.auth = { ...socket.auth, gameUrl: gameUrl };
-
     socket.on('next move', (fen: string) => {
       ({ tiles, isWhiteTurn, turn } = readFen(fen));
     });
@@ -77,7 +76,7 @@
     });
 
     socket.on('connect_error', (err) => {
-      if (err.message === 'auth not provided') {
+      if (err.message === 'user id not provided') {
         goto('/');
       }
     });
@@ -97,7 +96,7 @@
       playerSide: string;
       result: string;
     }>((resolve, reject) => {
-      socket.emit('request game', (response: any) => {
+      socket.emit('request game', gameUrl, (response: any) => {
         response
           ? resolve(response)
           : reject(new Error('Requested game was not found'));
@@ -115,7 +114,7 @@
 
   function sendFen(): void {
     const fen = writeFen({ tiles, isWhiteTurn, turn });
-    socket.emit('next move', fen);
+    socket.emit('next move', gameUrl, fen);
   }
 
   function handleClick(tile: Tile) {
@@ -353,7 +352,7 @@
   }
 
   function endGame(result: string) {
-    socket.emit('end game', result);
+    socket.emit('end game', gameUrl, result);
     gameResult = calcGameResult(result);
   }
 

@@ -19,15 +19,10 @@
     url = await response.text();
     clicked = true;
 
-    socket.auth = {
-      ...socket.auth,
-      gameUrl: url
-    };
-    const newGame = {fen: initialFen, side: 'white'};
+    const newGame = { fen: initialFen, side: 'white', gameUrl: url };
     if (!socket.connected) socket.connect();
-    
+
     socket.emit('init game', newGame);
-    console.log(newGame)
 
     socket.on('connect_error', (err) => {
       console.log('connection error!');
