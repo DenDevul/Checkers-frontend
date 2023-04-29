@@ -4,6 +4,7 @@
   import { page } from '$app/stores';
   import socket from '../../socket';
   import { initialFen, readFen, writeFen } from '../../utility/fen';
+  import Controls from '$lib/Controls.svelte';
 
   interface Tile {
     pos: number[];
@@ -21,10 +22,12 @@
   let turn: number;
   let isLoading: boolean = true;
   let canPlay: boolean = false;
+  let isDrawOffered: boolean = false;
   let gameResult: string = '*';
 
+  $: isGameOver = gameResult !== '*';
   $: if (!isLoading) {
-    if (gameResult !== '*') canPlay = false;
+    if (isGameOver) canPlay = false;
     else canPlay = isWhiteSide === isWhiteTurn;
   }
 
@@ -36,6 +39,7 @@
     const moves = getAllPossibleMoves(selectedPiece);
     possibleMoves = captures.length > 0 ? captures : moves;
   }
+
   $: isHighlighted = (tile: Tile): boolean => {
     if (!canPlay) return false;
 
@@ -45,12 +49,21 @@
   };
 
   $: board = () => {
-    if (isLoading || isWhiteSide) return tiles.flat();
+    if (isWhiteSide) return tiles.flat();
     else {
       let board = [...tiles].reverse();
       return board.map((row) => [...row].reverse()).flat();
     }
   };
+
+  $: if (isDrawOffered) {
+    if (isGameOver) isDrawOffered = false;
+    else {
+      setTimeout(() => {
+        isDrawOffered = false;
+      }, 5000);
+    }
+  }
 
   const promiseInit = new Promise<void>(async (resolve, reject) => {
     try {
@@ -71,8 +84,11 @@
     });
 
     socket.on('end game', (result: string) => {
-      console.log(result);
       gameResult = calcGameResult(result);
+    });
+
+    socket.on('offer draw', () => {
+      isDrawOffered = true;
     });
 
     socket.on('connect_error', (err) => {
@@ -375,9 +391,23 @@
     return res;
   }
 
-  function redirectToHome() {
-    socket.auth = { ...socket.auth, gameUrl: null };
-    goto('/');
+  function giveUp(): void {
+    const result = isWhiteSide ? '0-1' : '1-0';
+    endGame(result);
+  }
+
+  function offerDraw(): void {
+    socket.emit('offer draw', gameUrl);
+  }
+
+  function respondToDrawOffer(e: CustomEvent<any>): void {
+    const response = e.detail?.response;
+    if (response === 'yes') {
+      const result = '1/2-1/2';
+      endGame(result);
+    } else {
+      isDrawOffered = false;
+    }
   }
 </script>
 
@@ -387,7 +417,7 @@
       <div class="blur">
         <span class="loader" />
       </div>
-      {#each board() as tile (tile)}
+      {#each tiles.flat() as tile (tile)}
         <button class="tile" class:gray={isGray(tile)} />
       {/each}
     {:then _}
@@ -411,28 +441,17 @@
       <h1 style="color: red; position: absolute;">ПРОИЗОШЕЛ ЕРРОР</h1>
     {/await}
   </div>
-  <div class="controls">
-    <div class="turn b">
-      <h2>Ход белых</h2>
-    </div>
-    <div class="flex-col">
-      <button class="btn giveup"
-        >Cдаться <img src="svg/flag.svg" alt="" /></button
-      >
-      <button class="btn btn-draw"
-        >Предложить ничью <img src="svg/handshake.svg" alt="" /></button
-      >
-    </div>
-    <div class="draw">
-      <p>Соперник предлагает ничью</p>
-      <div class="draw-buttons">
-        <button class="btn"><img src="svg/check.svg" alt="" /></button>
-        <button class="btn no"><img src="svg/close.svg" alt="" /></button>
-      </div>
-    </div>
-  </div>
+  <Controls
+    {isWhiteTurn}
+    {isWhiteSide}
+    {isGameOver}
+    {isDrawOffered}
+    on:giveUp={giveUp}
+    on:offerDraw={offerDraw}
+    on:respond={respondToDrawOffer}
+  />
 </div>
-{#if gameResult !== '*'}
+{#if isGameOver}
   <div class="game-over">
     {#if gameResult === 'winner'}
       <h1>Вы победили!</h1>
@@ -441,7 +460,9 @@
     {:else if gameResult === 'draw'}
       <h1>Ничья!</h1>
     {/if}
-    <button on:click={redirectToHome}>сыграть новую игру</button>
+    <button class="game-over-btn" on:click={() => goto('/')}
+      >сыграть новую игру</button
+    >
   </div>
 {/if}
 
@@ -543,7 +564,6 @@
     box-sizing: border-box;
     animation: rotation 1s linear infinite;
   }
-
   @keyframes rotation {
     0% {
       transform: rotate(0deg);
@@ -566,7 +586,7 @@
     background: white;
     box-shadow: 0px 0px 12px 2px rgba(0, 0, 0, 0.08);
   }
-  .game-over button {
+  .game-over-btn {
     padding: 8px;
     text-transform: uppercase;
     border-radius: 4px;
@@ -575,91 +595,11 @@
     color: white;
     font-weight: bold;
   }
-  .game-over button:active {
+  .game-over-btn:hover {
+    background-color: hsl(0, 0%, 20%);
+  }
+  .game-over-btn:active {
     background-color: white;
     color: black;
-  }
-
-  .controls {
-    grid-area: controls;
-    padding-left: 32px;
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
-  }
-  .controls img {
-    width: 1.2rem;
-    height: 1.2rem;
-  }
-
-  .turn {
-    background-color: #fff;
-    border-radius: 8px;
-    padding: 2px;
-    text-align: center;
-  }
-  .turn.b {
-    background-color: black;
-    color: #fff;
-  }
-
-  .flex-col {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .btn {
-    border: none;
-    background-color: hsl(69, 69%, 55%);
-    border-radius: 8px;
-    padding: 8px;
-    font-size: 1.2rem;
-    box-shadow: 0px 0px 8px 1px rgb(0 0 0 / 0.1);
-  }
-  .btn:hover {
-    background-color: hsl(69, 69%, 48%);
-  }
-  .btn:active {
-    background-color: hsl(69, 69%, 41%);
-  }
-  .btn.giveup {
-    background-color: hsl(0, 0%, 100%);
-  }
-  .btn.giveup:hover {
-    background-color: hsl(0, 0%, 96%);
-  }
-  .btn.giveup:active {
-    background-color: hsl(0, 0%, 92%);
-  }
-  .btn.no {
-    background-color: hsl(9, 69%, 55%);
-  }
-  .btn.no:hover {
-    background-color: hsl(9, 69%, 48%);
-  }
-  .btn.no:active {
-    background-color: hsl(9, 69%, 41%);
-  }
-  .btn.btn-draw:active {
-    box-shadow: inset 0 0 10px 2px rgba(0, 0, 0, 0.2);
-  }
-
-  .draw {
-    background-color: #fff;
-    border-radius: 8px;
-    padding: 8px;
-    font-weight: bold;
-    font-size: 1.25rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-  .draw-buttons {
-    display: flex;
-    justify-content: space-evenly;
-  }
-  .draw-buttons button {
-    width: 5rem;
   }
 </style>
