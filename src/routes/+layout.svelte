@@ -1,12 +1,13 @@
 <svelte:head>
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
   <title>Checkers</title>
 </svelte:head>
 
 <header>
-  <h1>CHECKERS</h1>
+  <img src="svg/icon.svg" alt="icon" class="icon" />
+  <a href="/" class="home">
+    <h1>CHECKERS</h1>
+  </a>
 </header>
 <div class="wrapper">
   <slot />
@@ -21,6 +22,17 @@
     width: 100vw;
     display: flex;
     justify-content: center;
+    align-items: center;
+    gap: 4px;
+  }
+  header .home {
+    color: #2b2b2b;
+    text-decoration: none;
+  }
+  header .icon {
+    width: 32px;
+    height: 32px;
+    -webkit-user-drag: none;
   }
   .wrapper {
     width: 100vw;
