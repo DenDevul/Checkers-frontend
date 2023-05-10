@@ -34,17 +34,17 @@
       gameUrl: url
     };
 
-    if (!socket.connected) {
-      socket.connect();
+    if (!socket.connected) socket.connect();
+    else socket.removeAllListeners();
 
-      socket.on('connect_error', (err) => {
-        console.log('connection error!');
-        console.log(err);
-      });
-      socket.once('player connect', () => {
-        goto('/' + url);
-      });
-    }
+    socket.on('connect_error', (err) => {
+      console.log('connection error!');
+      console.log(err);
+    });
+
+    socket.once('player connect', () => {
+      goto('/' + url);
+    });
 
     socket.emit('init game', newGame);
   }

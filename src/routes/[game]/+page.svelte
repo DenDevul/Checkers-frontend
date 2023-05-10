@@ -79,6 +79,9 @@
   function connectSocket(): void {
     if (!browser) return;
 
+    if (!socket.connected) socket.connect();
+    else socket.removeAllListeners();
+
     socket.on('next move', (fen: string) => {
       ({ tiles, isWhiteTurn, turn } = readFen(fen));
     });
@@ -102,8 +105,6 @@
         goto('/');
       }
     });
-
-    if (!socket.connected) socket.connect();
   }
 
   async function loadGame(): Promise<void> {
