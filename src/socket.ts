@@ -2,7 +2,7 @@ import { nanoid } from 'nanoid';
 import { io } from 'socket.io-client';
 import { browser } from '$app/environment';
 
-const URL = import.meta.env.VITE_API_URL;
+const URL = import.meta.env.VITE_API_WS;
 const socket = io(URL, { autoConnect: false });
 
 function getUserId(): string {
