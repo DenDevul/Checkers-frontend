@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import socket from '../socket';
@@ -7,10 +6,11 @@
 
   let clicked = false;
   let checked = false;
+  let fetched = false;
   let url = '';
   let dialogHidden = true;
   $: fullUrl = $page.url.href + url;
-  $: checked, (clicked = false);
+  $: checked, (clicked = fetched = false);
 
   function copy() {
     navigator.clipboard.writeText(fullUrl);
@@ -23,29 +23,34 @@
   }
 
   async function handle() {
-    if (!browser) return;
-    const response = await fetch(import.meta.env.VITE_API_URL);
-    url = await response.text();
+    if (clicked) return;
     clicked = true;
 
-    const newGame = {
-      fen: initialFen,
-      side: !checked ? 'white' : 'black',
-      gameUrl: url
-    };
+    try {
+      const response = await fetch(import.meta.env.VITE_API_URL);
+      url = await response.text();
+      fetched = true;
+    } catch (error) {
+      alert('Произошла ошибка, попробуйте позже');
+      return;
+    }
 
     if (!socket.connected) socket.connect();
     else socket.removeAllListeners();
 
     socket.on('connect_error', (err) => {
-      console.log('connection error!');
-      console.log(err);
+      alert('Ошибка при подключении к игре');
     });
 
     socket.once('player connect', () => {
       goto('/' + url);
     });
 
+    const newGame = {
+      fen: initialFen,
+      side: !checked ? 'white' : 'black',
+      gameUrl: url
+    };
     socket.emit('init game', newGame);
   }
 </script>
@@ -58,8 +63,8 @@
     <label for="switch" class="toggle" />
     <span class:hide={!checked}>Черные</span>
   </div>
-  {#if !clicked}
-    <button class="btn" on:click={handle}>Начать</button>
+  {#if !fetched}
+    <button class="btn" class:clicked on:click={handle}>Начать</button>
   {:else}
     <div class="link">
       <label for="link">Отправь эту ссылку другу:</label>
@@ -163,6 +168,12 @@
     background-color: hsl(0, 0%, 98%);
   }
   .btn:active {
+    background-color: #bbeafe;
+    box-shadow: none;
+  }
+  .btn.clicked {
+    color: hsl(0, 0%, 40%);
+    cursor: not-allowed;
     background-color: #bbeafe;
     box-shadow: none;
   }

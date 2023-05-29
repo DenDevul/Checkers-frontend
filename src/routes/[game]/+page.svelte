@@ -66,6 +66,7 @@
   }
 
   const promiseInit = new Promise<void>(async (resolve, reject) => {
+    if (!browser) return reject();
     try {
       connectSocket();
       await loadGame();
@@ -77,8 +78,6 @@
   });
 
   function connectSocket(): void {
-    if (!browser) return;
-
     if (!socket.connected) socket.connect();
     else socket.removeAllListeners();
 
