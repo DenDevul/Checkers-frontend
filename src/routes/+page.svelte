@@ -8,19 +8,8 @@
   let checked = false;
   let fetched = false;
   let url = '';
-  let dialogHidden = true;
   $: fullUrl = $page.url.href + url;
   $: checked, (clicked = fetched = false);
-
-  function copy() {
-    navigator.clipboard.writeText(fullUrl);
-    if (dialogHidden) {
-      dialogHidden = false;
-      setTimeout(() => {
-        dialogHidden = true;
-      }, 1200);
-    }
-  }
 
   async function handle() {
     if (clicked) return;
@@ -56,69 +45,59 @@
 </script>
 
 <div class="window">
-  <h1>Начать игру</h1>
+  <h2>Начать игру</h2>
   <div class="side">
     <span class:hide={checked}>Белые</span>
     <input type="checkbox" id="switch" class="checkbox" bind:checked />
     <label for="switch" class="toggle" />
     <span class:hide={!checked}>Черные</span>
   </div>
-  {#if !fetched}
-    <button class="btn" class:clicked on:click={handle}>Начать</button>
-  {:else}
-    <div class="link">
-      <label for="link">Отправь эту ссылку другу:</label>
-      <div class="link-button">
-        <button id="link" on:click={copy}>{fullUrl}</button>
-        <div class="dialog" class:hidden={dialogHidden}>
-          <p>копировано</p>
-        </div>
-      </div>
+  <div class="link flex">
+    <button class="btn" class:clicked class:hide={fetched} on:click={handle}
+      >Начать</button
+    >
+    <div class="flex" class:hide={!fetched}>
+      <p>Отправь ссылку другу</p>
+      <span class="url">{fullUrl}</span>
     </div>
-  {/if}
+  </div>
 </div>
 
 <style>
   .window {
-    font-size: 1.5rem;
-    height: 15em;
-    width: 15em;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 1rem;
-    gap: 2rem;
+    width: min(18em, 90%);
     border-radius: 10px;
-    background-color: #bbeafe;
-    user-select: none;
-  }
-  .window > *:last-child {
-    margin-top: auto;
-    margin-bottom: 2rem;
+    background-color: #9fdef9;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    gap: 1.5em;
   }
 
+  .hide {
+    opacity: 0;
+  }
   .side {
     font-weight: bold;
     display: flex;
     align-items: center;
   }
-  .side .hide {
-    opacity: 0;
-  }
   .side > span {
     transition: opacity ease-in 0.25s;
   }
   .side > span:first-child {
-    margin-right: 1rem;
+    margin-right: 0.5rem;
   }
   .side > span:last-child {
-    margin-left: 1rem;
+    margin-left: 0.5rem;
   }
 
   .toggle {
     position: relative;
     display: flex;
     align-items: center;
+    font-size: 1.25em;
     width: 2em;
     height: 1em;
     background-color: black;
@@ -144,7 +123,7 @@
     background-color: white;
   }
   .checkbox:focus-visible + .toggle {
-    outline: 2px solid blue;
+    outline: 2px solid red;
   }
   .checkbox {
     opacity: 0;
@@ -154,7 +133,6 @@
   .btn {
     font-size: 1em;
     padding: 8px;
-    width: 65%;
     border: 2px solid white;
     border-radius: 6px;
     font-weight: bold;
@@ -168,68 +146,40 @@
     background-color: hsl(0, 0%, 98%);
   }
   .btn:active {
-    background-color: #bbeafe;
+    background-color: #9fdef9;
     box-shadow: none;
   }
   .btn.clicked {
     color: hsl(0, 0%, 40%);
     cursor: not-allowed;
-    background-color: #bbeafe;
+    background-color: #9fdef9;
     box-shadow: none;
   }
 
   .link {
+    height: 4em;
+    justify-content: center;
+  }
+  .flex {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-  }
-  .link > label {
-    font-size: smaller;
-  }
-  .link-button {
-    position: relative;
-    display: flex;
     align-items: center;
+    gap: 0.5rem;
   }
-  .dialog {
-    position: absolute;
-    display: flex;
-    align-items: center;
-    left: calc(100% + 0.5rem);
-    font-size: 1rem;
-    border: none;
+  .flex .hide {
+    display: none;
+  }
+
+  .url {
+    background-color: #fff;
     border-radius: 8px;
     padding: 4px;
-    background-color: hsl(0, 0%, 20%);
-    color: white;
-    z-index: 10;
-    transition: opacity ease-in 0.2s;
+    user-select: all;
   }
-  .dialog.hidden {
-    opacity: 0;
-  }
-  .dialog::before {
-    content: '';
-    position: absolute;
-    background-color: red;
-    background-color: hsl(0, 0%, 20%);
-    z-index: -1;
-    width: 10px;
-    height: 10px;
-    left: -3px;
-    transform: rotate(45deg);
-  }
-  #link {
-    width: 100%;
-    background-color: white;
-    /* border: 4px solid black; */
-    cursor: pointer;
-    border: none;
-    padding: 8px;
-    border-radius: 1rem;
-    transition: transform ease-in 50ms;
-  }
-  #link:active {
-    transform: scale(0.97);
+
+  @media screen and (min-width: 481px) {
+    .window {
+      font-size: 1.25em;
+    }
   }
 </style>

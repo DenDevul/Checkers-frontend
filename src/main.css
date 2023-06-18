@@ -1,17 +1,29 @@
 :root {
+  --background-color: #ffedbf;
   --tile-size: 80px;
   --piece-size: 65%;
   --board-border-radius: 10px;
 }
 
 body {
-  background-color: #ffedbf;
+  background-color: var(--background-color);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  user-select: none;
 }
 
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+label,
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+h2,
+p,
+span {
+  user-select: none;
 }
