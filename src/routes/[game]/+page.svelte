@@ -411,87 +411,116 @@
   }
 </script>
 
-<div class="grid">
-  <div class="tiles">
-    {#await promiseInit}
-      <div class="blur">
-        <span class="loader" />
-      </div>
-      {#each tiles.flat() as tile (tile)}
-        <button class="tile" class:gray={isGray(tile)} />
-      {/each}
-    {:then _}
-      {#each board() as tile (tile)}
-        <button
-          class="tile"
-          class:gray={isGray(tile)}
-          class:highlight={isHighlighted(tile)}
-          on:click={() => {
-            handleClick(tile);
-          }}
-        >
-          {#if tile.piece}
-            <div class="piece" class:black={!tile.piece.isWhite}>
-              <span class:hidden={!tile.piece.isKing}>&#128081;</span>
-            </div>
-          {/if}
-        </button>
-      {/each}
-    {:catch}
-      <h1 style="color: red; position: absolute;">ПРОИЗОШЕЛ ЕРРОР</h1>
-    {/await}
+<div class="wrapper">
+  <div class="turn" class:turn-black={!(isWhiteTurn ?? true)}>
+    {#if isWhiteSide === isWhiteTurn}
+      <h2>Ваш ход</h2>
+    {:else}
+      <h2>Ход соперника</h2>
+    {/if}
   </div>
-  <Controls
-    {isWhiteTurn}
-    {isWhiteSide}
-    {isGameOver}
-    {isDrawOffered}
-    on:giveUp={giveUp}
-    on:offerDraw={offerDraw}
-    on:respond={respondToDrawOffer}
-  />
+  <div class="container">
+    <div class="tiles">
+      {#await promiseInit}
+        <div class="blur">
+          <span class="loader" />
+        </div>
+        {#each tiles.flat() as tile (tile)}
+          <button class="tile" class:gray={isGray(tile)} />
+        {/each}
+      {:then _}
+        {#each board() as tile (tile)}
+          <button
+            class="tile"
+            class:gray={isGray(tile)}
+            class:highlight={isHighlighted(tile)}
+            on:click={() => {
+              handleClick(tile);
+            }}
+          >
+            {#if tile.piece}
+              <div class="piece" class:black={!tile.piece.isWhite}>
+                <span class="king" class:hidden={!tile.piece.isKing}
+                  >&#128081;</span
+                >
+              </div>
+            {/if}
+          </button>
+        {/each}
+      {:catch}
+        {#each tiles.flat() as tile (tile)}
+          <button class="tile" class:gray={isGray(tile)} />
+        {/each}
+        <h1 style="color: red; position: absolute;">ПРОИЗОШЕЛ ЕРРОР</h1>
+      {/await}
+    </div>
+    <Controls
+      {isGameOver}
+      {isDrawOffered}
+      on:giveUp={giveUp}
+      on:offerDraw={offerDraw}
+      on:respond={respondToDrawOffer}
+    />
+  </div>
 </div>
 {#if isGameOver}
   <div class="game-over">
     {#if gameResult === 'winner'}
-      <h1>Вы победили!</h1>
+      <h2>Вы победили!🥳</h2>
     {:else if gameResult === 'loser'}
-      <h1>Увы, вы проиграли!</h1>
+      <h2>Вы проиграли!😔</h2>
     {:else if gameResult === 'draw'}
-      <h1>Ничья!</h1>
+      <h2>Ничья!🤝</h2>
     {/if}
-    <button class="game-over-btn" on:click={() => goto('/')}
-      >сыграть новую игру</button
-    >
+    <button on:click={() => goto('/')}>сыграть заново</button>
   </div>
 {/if}
 
 <style>
-  .grid {
-    display: grid;
-    grid-template:
-      '. board controls' auto
-      / 1fr auto 1fr;
+  .wrapper {
+    align-self: start;
+    padding: 2rem 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .turn {
+    width: 14rem;
+    border-radius: 8px;
+    padding: 2px 0;
+    text-align: center;
+    background-color: white;
+    color: black;
+  }
+  .turn-black {
+    background-color: black;
+    color: white;
+  }
+
+  .container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
   }
 
   .tiles {
-    height: calc(var(--tile-size) * 8);
-    width: calc(var(--tile-size) * 8);
     display: grid;
     grid-template-columns: repeat(8, 1fr);
-    border-radius: var(--board-border-radius);
+    border-radius: 10px;
     box-shadow: 0px 0px 20px 4px rgba(0, 0, 0, 0.08);
     grid-area: board;
   }
 
   .tile {
-    height: var(--tile-size);
-    width: var(--tile-size);
+    height: min(3.75rem, 10vw);
+    width: min(3.75rem, 10vw);
     background-color: white;
     display: flex;
     justify-content: center;
     align-items: center;
-    user-select: none;
     cursor: pointer;
     border: none;
     outline: none;
@@ -507,34 +536,32 @@
   }
 
   .tile:first-child {
-    border-top-left-radius: var(--board-border-radius);
+    border-top-left-radius: 10px;
   }
   .tile:nth-child(8) {
-    border-top-right-radius: var(--board-border-radius);
+    border-top-right-radius: 10px;
   }
   .tile:nth-child(57) {
-    border-bottom-left-radius: var(--board-border-radius);
+    border-bottom-left-radius: 10px;
   }
   .tile:last-child {
-    border-bottom-right-radius: var(--board-border-radius);
+    border-bottom-right-radius: 10px;
   }
 
   .piece {
-    height: var(--piece-size);
-    width: var(--piece-size);
+    height: 65%;
+    width: 65%;
     background-color: white;
     color: black;
-    border-radius: 100%;
+    border-radius: 50%;
     display: flex;
     justify-content: center;
-    font-size: 2em;
-  }
-  .piece > span {
-    font-size: xx-large;
   }
   .piece.black {
     background-color: black;
-    color: yellow;
+  }
+  .king {
+    font-size: min(1.5rem, 4vw);
   }
   .hidden {
     visibility: hidden;
@@ -580,26 +607,52 @@
     justify-content: center;
     flex-direction: column;
     border-radius: 1rem;
-    border: black 2px solid;
-    padding: 1rem;
+    padding: 1.75rem;
     gap: 1rem;
-    background: white;
-    box-shadow: 0px 0px 12px 2px rgba(0, 0, 0, 0.08);
+    background: rgb(255, 255, 255);
+    box-shadow: 0px 0px 12px 2px rgba(0, 0, 0, 0.25);
   }
-  .game-over-btn {
+  .game-over button {
     padding: 8px;
     text-transform: uppercase;
-    border-radius: 4px;
-    border: black 1px solid;
+    font-weight: bold;
+    border-radius: 8px;
+    border: black 2px solid;
     background-color: black;
     color: white;
-    font-weight: bold;
   }
-  .game-over-btn:hover {
-    background-color: hsl(0, 0%, 20%);
+  .game-over button:hover {
+    background-color: hsl(0, 0%, 15%);
   }
-  .game-over-btn:active {
+  .game-over button:active {
     background-color: white;
     color: black;
+  }
+  .game-over button:focus-visible {
+    outline: 3px solid red;
+  }
+
+  @media screen and (min-width: 768px) {
+    .container {
+      padding: 0 2rem;
+      flex-direction: row;
+      align-items: start;
+    }
+    .tile {
+      width: clamp(3.75rem, 7.5vw, 4.5rem);
+      height: clamp(3.75rem, 7.5vw, 4.5rem);
+    }
+    .king {
+      font-size: clamp(1.5rem, 3.15vw, 1.85rem);
+    }
+  }
+
+  @media screen and (min-width: 1024px) {
+    .container {
+      display: grid;
+      grid-template:
+        '. board controls' auto
+        / 1fr 1fr 1fr;
+    }
   }
 </style>

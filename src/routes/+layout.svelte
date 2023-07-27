@@ -3,42 +3,43 @@
   <title>Checkers</title>
 </svelte:head>
 
-<header>
-  <img src="svg/icon.svg" alt="icon" class="icon" />
-  <a href="/" class="home">
-    <h1>CHECKERS</h1>
-  </a>
-</header>
-<div class="wrapper">
+<div class="main">
+  <header>
+    <img src="svg/icon.svg" alt="icon" class="icon" />
+    <a href="/" class="home">
+      <h1>CHECKERS</h1>
+    </a>
+  </header>
   <slot />
 </div>
 
 <style>
   @import '../main.css';
-  header {
-    position: absolute;
-    top: 0;
-    left: 0;
+  .main {
     width: 100vw;
+    height: 100vh;
+    display: grid;
+    grid-template:
+      'header' min-content
+      'content' auto
+      / 100%;
+    justify-items: center;
+    align-items: center;
+  }
+  header {
     display: flex;
     justify-content: center;
     align-items: center;
     gap: 4px;
+    height: 3rem;
   }
   header .home {
     color: #2b2b2b;
     text-decoration: none;
   }
   header .icon {
-    width: 32px;
-    height: 32px;
+    width: 2rem;
+    height: 2rem;
     -webkit-user-drag: none;
-  }
-  .wrapper {
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
   }
 </style>

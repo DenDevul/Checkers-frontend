@@ -1,8 +1,5 @@
 :root {
   --background-color: #ffedbf;
-  --tile-size: 80px;
-  --piece-size: 65%;
-  --board-border-radius: 10px;
 }
 
 body {
