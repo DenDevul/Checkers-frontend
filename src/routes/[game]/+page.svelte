@@ -11,8 +11,6 @@
     piece: { isWhite: boolean; isKing: boolean } | null;
   }
 
-  const gameUrl = $page.url.pathname.slice(1);
-
   let tiles: Tile[][] = readFen(initialFen).tiles;
   let selectedPiece: Tile | null = null;
   let possibleMoves: Tile[] = [];
@@ -24,8 +22,21 @@
   let canPlay: boolean = false;
   let isDrawOffered: boolean = false;
   let gameResult: string = '*';
+  let restartButtonClicked: boolean = false;
+  let readyToRestart: boolean = false;
+  let promise: Promise<unknown>;
+
+  $: gameUrl = $page.url.pathname.slice(1);
+
+  $: if (gameUrl) {
+    isLoading = true;
+    restartButtonClicked = false;
+    readyToRestart = false;
+    promise = fetch();
+  }
 
   $: isGameOver = gameResult !== '*';
+
   $: if (!isLoading) {
     if (isGameOver) canPlay = false;
     else canPlay = isWhiteSide === isWhiteTurn;
@@ -34,6 +45,7 @@
   $: if (canPlay) {
     playablePieces = getPlayablePieces();
   }
+
   $: if (selectedPiece) {
     const captures = getAllPossibleCaptures(selectedPiece);
     const moves = getAllPossibleMoves(selectedPiece);
@@ -65,17 +77,16 @@
     }
   }
 
-  const promiseInit = new Promise<void>(async (resolve, reject) => {
-    if (!browser) return reject();
+  async function fetch() {
+    if (!browser) return;
     try {
       connectSocket();
       await loadGame();
       isLoading = false;
-      resolve();
-    } catch (er) {
-      reject(er);
+    } catch (err) {
+      return err;
     }
-  });
+  }
 
   function connectSocket(): void {
     if (!socket.connected) socket.connect();
@@ -91,6 +102,14 @@
 
     socket.on('offer draw', () => {
       isDrawOffered = true;
+    });
+
+    socket.on('request restart', () => {
+      readyToRestart = true;
+    });
+
+    socket.on('restart game', async (newGameUrl: string) => {
+      await goto(newGameUrl);
     });
 
     socket.on('connect_error', (err) => {
@@ -409,6 +428,17 @@
       isDrawOffered = false;
     }
   }
+
+  function restartGame(
+    event: MouseEvent & { currentTarget: EventTarget & HTMLButtonElement }
+  ) {
+    restartButtonClicked = true;
+    if (readyToRestart) {
+      socket.emit('restart game', gameUrl, initialFen);
+    } else {
+      socket.emit('request restart', gameUrl);
+    }
+  }
 </script>
 
 <div class="wrapper">
@@ -421,7 +451,7 @@
   </div>
   <div class="container">
     <div class="tiles">
-      {#await promiseInit}
+      {#await promise}
         <div class="blur">
           <span class="loader" />
         </div>
@@ -472,7 +502,9 @@
     {:else if gameResult === 'draw'}
       <h2>Ничья!🤝</h2>
     {/if}
-    <button on:click={() => goto('/')}>сыграть заново</button>
+    <button class:clicked={restartButtonClicked} on:click|once={restartGame}
+      >{restartButtonClicked ? 'ожидание ответа...' : 'сыграть заново'}</button
+    >
   </div>
 {/if}
 
@@ -630,6 +662,10 @@
   }
   .game-over button:focus-visible {
     outline: 3px solid red;
+  }
+  .game-over button.clicked {
+    background-color: white;
+    color: black;
   }
 
   @media screen and (min-width: 768px) {

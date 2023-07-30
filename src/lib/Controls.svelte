@@ -6,6 +6,10 @@
 
   let btnDrawFlag: boolean = false;
 
+  $: if (isGameOver) {
+    btnDrawFlag = false;
+  }
+
   const dispatch = createEventDispatcher();
 
   function giveUp() {
