@@ -84,7 +84,13 @@
       await loadGame();
       isLoading = false;
     } catch (err) {
-      return err;
+      if (err instanceof Error) {
+        if (err.message === 'Requested game was not found') {
+          alert('Игра не найдена');
+          await goto('/');
+        }
+      }
+      throw err;
     }
   }
 
@@ -112,15 +118,15 @@
       await goto(newGameUrl);
     });
 
-    socket.on('connect_error', (err) => {
+    socket.on('connect_error', async (err) => {
       if (err.message === 'user id not provided') {
-        goto('/');
+        await goto('/');
       }
     });
 
-    socket.on('disconnect', (reason) => {
+    socket.on('disconnect', async (reason) => {
       if (reason === 'io server disconnect') {
-        goto('/');
+        await goto('/');
       }
     });
   }
@@ -143,7 +149,7 @@
       ({ tiles, isWhiteTurn, turn } = readFen(data.fen));
       gameResult = calcGameResult(data.result);
     } catch (error) {
-      throw new Error('Could not load game');
+      throw error;
     }
   }
 
