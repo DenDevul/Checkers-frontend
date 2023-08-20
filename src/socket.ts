@@ -1,8 +1,9 @@
 import { nanoid } from 'nanoid';
 import { io } from 'socket.io-client';
 import { browser } from '$app/environment';
+import { env } from '$env/dynamic/public';
 
-const URL = import.meta.env.VITE_API_WS;
+const URL = env.PUBLIC_API_WS;
 const socket = io(URL, { autoConnect: false, reconnectionAttempts: 9 });
 
 function getUserId(): string {

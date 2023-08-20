@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import socket from '../socket';
   import { initialFen } from '../utility/fen';
+  import { env } from '$env/dynamic/public';
 
   let clicked = false;
   let checked = false;
@@ -16,7 +17,7 @@
     clicked = true;
 
     try {
-      const response = await fetch(import.meta.env.VITE_API_URL);
+      const response = await fetch(env.PUBLIC_API_URL);
       url = await response.text();
       fetched = true;
     } catch (error) {
