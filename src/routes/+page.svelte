@@ -9,7 +9,7 @@
   let checked = false;
   let fetched = false;
   let url = '';
-  $: fullUrl = $page.url.href + url;
+  $: fullUrl = env.PUBLIC_HOST_URL + '/' + url;
   $: checked, (clicked = fetched = false);
 
   async function handle() {
