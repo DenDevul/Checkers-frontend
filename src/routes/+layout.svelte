@@ -1,5 +1,13 @@
 <svelte:head>
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+  <meta name="description" content="Играть в шашки онлайн!" />
+
+  <meta property="og:url" content="https://densup.site" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Checkers" />
+  <meta property="og:description" content="Играть в шашки онлайн!" />
+  <meta property="og:image" content="https://densup.site/cat.jpg" />
+
   <title>Checkers</title>
 </svelte:head>
 
